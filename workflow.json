@@ -1,0 +1,604 @@
+{
+  "name": "Reciclar vídeos de YouTube en contenido",
+  "nodes": [
+    {
+      "id": "44f0ad88-6274-4633-aefc-bdd23b7b394e",
+      "name": "Nuevo vídeo en el canal (RSS)",
+      "type": "n8n-nodes-base.rssFeedReadTrigger",
+      "typeVersion": 1,
+      "position": [
+        -368,
+        96
+      ],
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        },
+        "feedUrl": "https://www.youtube.com/feeds/videos.xml?channel_id=TU_CHANNEL_ID"
+      }
+    },
+    {
+      "id": "668084b2-5244-43e3-9ea0-306376bd6cc3",
+      "name": "Vídeo antiguo del histórico (manual)",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -368,
+        288
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "6e1b8b9d-a735-4c9b-b6e7-e7f421d6d4dd",
+      "name": "Datos del vídeo",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -144,
+        192
+      ],
+      "parameters": {
+        "mode": "manual",
+        "includeOtherFields": false,
+        "assignments": {
+          "assignments": [
+            {
+              "id": "video-url",
+              "name": "video_url",
+              "value": "={{ $json.link || \"https://www.youtube.com/watch?v=PEGA_AQUI_EL_ID\" }}",
+              "type": "string"
+            },
+            {
+              "id": "video-id",
+              "name": "video_id",
+              "value": "={{ ($json.link || \"https://www.youtube.com/watch?v=PEGA_AQUI_EL_ID\").split(\"v=\")[1].split(\"&\")[0] }}",
+              "type": "string"
+            },
+            {
+              "id": "video-titulo",
+              "name": "titulo",
+              "value": "={{ $json.title || \"Vídeo del histórico\" }}",
+              "type": "string"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "d53e5c5e-c4a3-455e-a9bb-0c06126c6792",
+      "name": "Buscar subtítulos (API de YouTube)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        304,
+        192
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/youtube/v3/captions?part=snippet&videoId={{ $json.video_id }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api"
+      }
+    },
+    {
+      "id": "b0eb939a-758c-4ccc-ad2c-f77d8d783435",
+      "name": "Descargar transcripción",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        528,
+        192
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://www.googleapis.com/youtube/v3/captions/{{ $json.items[0].id }}?tfmt=srt",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "youTubeOAuth2Api",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text",
+              "outputPropertyName": "transcripcion"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "e9798384-f849-48d1-8511-a741fca901b4",
+      "name": "Fuente 1 · Casos de cliente (conecta aquí)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        -32
+      ],
+      "parameters": {},
+      "executeOnce": true
+    },
+    {
+      "id": "72d12e2f-14a9-4730-97d4-456f7f030756",
+      "name": "Fuente 2 · Producto o changelog (conecta aquí)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        160
+      ],
+      "parameters": {},
+      "executeOnce": true
+    },
+    {
+      "id": "d12dd29f-dd0e-432c-bd94-36d3de1985b1",
+      "name": "Fuente 3 · Contenidos publicados (conecta aquí)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        352
+      ],
+      "parameters": {},
+      "executeOnce": true
+    },
+    {
+      "id": "a8fff57e-f26c-48fa-aec2-88d432c369cf",
+      "name": "Juntar fuentes",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        2464,
+        -144
+      ],
+      "parameters": {
+        "mode": "append",
+        "numberInputs": 3
+      }
+    },
+    {
+      "id": "7d30162c-041e-458f-b387-021986585b50",
+      "name": "Un solo paquete de contexto",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        2688,
+        -128
+      ],
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "fuentes"
+      }
+    },
+    {
+      "id": "6f4647c8-0986-44a9-a524-a7f580aac786",
+      "name": "Cruce con reglas",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        2944,
+        -128
+      ],
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "jsonOutput": true,
+        "messages": {
+          "values": [
+            {
+              "role": "user",
+              "content": "=Tienes la transcripción de un vídeo y varias fuentes de conocimiento propias. Decide qué elementos de las fuentes encajan de verdad con el vídeo.\n\nREGLAS (edítalas con las tuyas):\n1. Un caso de cliente solo entra si trata el mismo problema que el vídeo.\n2. Una función del producto solo entra si resuelve ese problema.\n3. Los enlaces internos tienen que tratar el mismo tema. Máximo 5.\n4. Mencionar algo es opcional. Si nada cumple las reglas, devuelve listas vacías.\n\nDevuelve solo este JSON: {\"casos\": [], \"producto\": [], \"enlaces\": [], \"angulo\": \"\"}\n\nVÍDEO: {{ $(\"Datos del vídeo\").item.json.titulo }} ({{ $(\"Datos del vídeo\").item.json.video_url }})\n\nTRANSCRIPCIÓN:\n{{ $(\"Descargar transcripción\").item.json.transcripcion }}\n\nFUENTES:\n{{ JSON.stringify($json.fuentes) }}"
+            }
+          ]
+        },
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "models/gemini-3-flash-preview"
+        }
+      }
+    },
+    {
+      "id": "3266f6f6-095b-4a7c-8f8e-ac2b28f180f6",
+      "name": "Prompt maestro",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        3296,
+        -128
+      ],
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "jsonOutput": true,
+        "messages": {
+          "values": [
+            {
+              "role": "user",
+              "content": "=Escribe estas piezas a partir del vídeo y del cruce de fuentes.\n\n1. Un artículo de blog pensado para aparecer en respuestas de LLMs: respuesta directa en el primer párrafo, subtítulos en forma de pregunta, ejemplos concretos y una sección de preguntas frecuentes al final.\n2. Entre 3 y 4 posts de LinkedIn, cada uno con una idea distinta del vídeo.\n3. Una edición de newsletter.\n\nUsa solo los casos, funciones y enlaces que aparecen en el cruce. No inventes datos.\n\nDevuelve solo este JSON: {\"titulo_articulo\": \"\", \"articulo\": \"\", \"posts_linkedin\": [], \"newsletter\": \"\"}\n\nVÍDEO: {{ $(\"Datos del vídeo\").item.json.titulo }}\n\nTRANSCRIPCIÓN:\n{{ $(\"Descargar transcripción\").item.json.transcripcion }}\n\nCRUCE:\n{{ JSON.stringify($json) }}"
+            }
+          ]
+        },
+        "options": {
+          "systemMessage": "CAPA DE CONTEXTO (sustituye este texto por la tuya): quién es la marca, a quién habla, cómo escribe, palabras que usa y palabras que evita, ejemplos de textos buenos.",
+          "maxOutputTokens": 8000
+        },
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "models/gemini-3-flash-preview"
+        }
+      }
+    },
+    {
+      "id": "09f952d1-f361-43e7-8978-dd377ead87db",
+      "name": "Imagen con tu brand kit (opcional)",
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        3648,
+        -128
+      ],
+      "parameters": {
+        "resource": "image",
+        "operation": "generate",
+        "prompt": "=Imagen de cabecera para un artículo titulado: {{ $json.content.parts[0].text }}. BRAND KIT (sustitúyelo por el tuyo): colores, tipografía, estilo de ilustración y lo que nunca debe aparecer.",
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "models/gemini-3.1-flash-image-preview"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "id": "aa3d6e90-3ca5-47a0-a183-9ae7c63cf6ee",
+      "name": "Guardar borradores (conecta tu CMS o base de datos)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4192,
+        -224
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "f8d7f1a8-952f-410c-aa8e-a98e0a92c610",
+      "name": "Aviso para revisar (conecta Slack, email o tu gestor de tareas)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        4416,
+        -224
+      ],
+      "parameters": {}
+    },
+    {
+      "id": "ba5ce537-fad9-434f-9d24-01d6be23a6bb",
+      "name": "Nota · Cómo usar este flujo",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1888,
+        -32
+      ],
+      "parameters": {
+        "content": "## Reciclar vídeos de YouTube en contenido\n\nCada vídeo nuevo de tu canal se convierte en un artículo de blog pensado para LLMs, 3 o 4 posts de LinkedIn y una newsletter.\n\nEsto es un esquema. Los nodos marcados con \"conecta aquí\" o \"configúrala tú\" los tienes que completar con tus herramientas.\n\nOrden para dejarlo funcionando:\n1. Entrada: pon la URL del RSS de tu canal.\n2. Transcripción: crea la credencial de YouTube (nota 2).\n3. Fuentes: conecta tu propia base de conocimiento.\n4. Cruce: escribe tus reglas.\n5. Prompt maestro: pega tu capa de contexto.\n6. Publicación: conecta dónde guardas los borradores.\n\nGuía completa: README del repositorio reciclar-youtube-videos.",
+        "color": 7,
+        "width": 448,
+        "height": 400
+      }
+    },
+    {
+      "id": "02eee5e8-b38e-4568-9e54-3f37e8aca4a3",
+      "name": "Nota · 1. Entrada",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        512
+      ],
+      "parameters": {
+        "content": "### 1. Entrada\n\nDos formas de empezar:\n\n- RSS: cambia TU_CHANNEL_ID por el ID de tu canal (en YouTube: Configuración, Configuración avanzada). El flujo se lanza solo cuando subes un vídeo.\n- Manual: para el histórico. Abre \"Datos del vídeo\", cambia PEGA_AQUI_EL_ID por el ID del vídeo antiguo y ejecuta.",
+        "color": 5,
+        "width": 384,
+        "height": 416
+      }
+    },
+    {
+      "id": "f1848a88-c29a-4314-8460-b32a1d3a5610",
+      "name": "Nota · 2. Transcripción",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        272,
+        416
+      ],
+      "parameters": {
+        "content": "### 2. Transcripción (pendiente de configurar)\n\nEstos dos nodos usan la API de YouTube. Para activarlos:\n\n1. Entra en console.cloud.google.com y crea un proyecto.\n2. En \"APIs y servicios\", activa YouTube Data API v3.\n3. Configura la pantalla de consentimiento OAuth (tipo externo, añade tu email como usuario de prueba).\n4. En \"Credenciales\", crea un ID de cliente OAuth (aplicación web).\n5. En n8n, crea una credencial \"YouTube OAuth2 API\". Copia la URL de redirección que te da n8n y pégala en Google como URI de redirección autorizado.\n6. Pega en n8n el Client ID y el Client Secret, conecta tu cuenta y selecciona la credencial en los dos nodos.\n\nOjo: la API solo descarga subtítulos de vídeos de tu propio canal. Si no te funciona, sustituye estos dos nodos por un \"Edit Fields\" donde pegues la transcripción a mano en un campo llamado transcripcion.",
+        "color": 3,
+        "width": 384,
+        "height": 288
+      }
+    },
+    {
+      "id": "0836c325-5dfd-47e1-95e6-d6cbcf6d4a00",
+      "name": "Nota · 3. Fuentes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1488,
+        16
+      ],
+      "parameters": {
+        "content": "### 3. Tus fuentes de conocimiento\n\nCon estas fuentes el contenido habla de tus clientes y de tu producto, y deja de sonar a resumen del vídeo. Cada nodo marcado con \"conecta aquí\" es un hueco: bórralo y pon en su lugar el nodo de tu herramienta (Notion, Google Sheets, Airtable, una Data Table de n8n o un HTTP Request a tu API).\n\nEjemplos de fuentes:\n- Casos de cliente con su problema, solución y datos del antes y el después.\n- Changelog o novedades del producto.\n- Artículos y páginas pilar ya publicados, para enlazar.\n\n¿Tienes más o menos de tres? Añade o quita nodos y cambia el número de entradas en \"Juntar fuentes\".\n\nConsejo: cuanto mejor estén etiquetadas tus tablas (problema, sector, función, tema), mejor funciona el cruce.",
+        "color": 4,
+        "width": 608,
+        "height": 352
+      }
+    },
+    {
+      "id": "000ec145-69a1-4f9e-9e65-6b73638d5e6e",
+      "name": "Nota · 4 y 5. Escritura",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2608,
+        160
+      ],
+      "parameters": {
+        "content": "### 4 y 5. Cruce y prompt maestro\n\nCruce con reglas: decide qué casos, funciones y enlaces encajan con el vídeo. Las reglas del prompt son un ejemplo. Escribe las tuyas: lo que no cumpla, no entra.\n\nPrompt maestro: escribe las piezas. En Opciones, \"System Message\", pega tu capa de contexto: quién es la marca, cómo habla, palabras que usa y evita, y algún texto de ejemplo.\n\nModelo: elige el que prefieras en cada nodo. Yo usaba Gemini Pro por calidad y precio.\n\nCredencial: crea una \"Google Gemini (PaLM) API\" con una API key de aistudio.google.com.",
+        "color": 6,
+        "width": 608,
+        "height": 288
+      }
+    },
+    {
+      "id": "c0d59b7d-b5c6-4e44-a099-23c2e091aabe",
+      "name": "Nota · 6. Imágenes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3584,
+        144
+      ],
+      "parameters": {
+        "content": "### 6. Imágenes (opcional)\n\nGenera una imagen de cabecera con Nano Banana. Viene desactivado: actívalo cuando tengas tu brand kit escrito en el prompt.",
+        "color": 2,
+        "width": 224,
+        "height": 288
+      }
+    },
+    {
+      "id": "84779d5b-15d1-4fa7-a544-486e9475dd50",
+      "name": "Nota · 7. Publicación",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4128,
+        32
+      ],
+      "parameters": {
+        "content": "### 7. Publicación y revisión\n\nSustituye estos dos nodos por los tuyos:\n- Guardar: Notion, Google Docs, WordPress, Webflow, el CMS de Framer conectado a una base de datos...\n- Aviso: Slack, email o una tarea en Asana, Trello o Linear.\n\nRecomendación: no publiques en automático. Revisa los borradores una vez por semana antes de que salgan.",
+        "color": 5,
+        "width": 480,
+        "height": 288
+      }
+    }
+  ],
+  "connections": {
+    "Nuevo vídeo en el canal (RSS)": {
+      "main": [
+        [
+          {
+            "node": "Datos del vídeo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Vídeo antiguo del histórico (manual)": {
+      "main": [
+        [
+          {
+            "node": "Datos del vídeo",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Datos del vídeo": {
+      "main": [
+        [
+          {
+            "node": "Buscar subtítulos (API de YouTube)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar subtítulos (API de YouTube)": {
+      "main": [
+        [
+          {
+            "node": "Descargar transcripción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Descargar transcripción": {
+      "main": [
+        [
+          {
+            "node": "Fuente 1 · Casos de cliente (conecta aquí)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fuente 2 · Producto o changelog (conecta aquí)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fuente 3 · Contenidos publicados (conecta aquí)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fuente 1 · Casos de cliente (conecta aquí)": {
+      "main": [
+        [
+          {
+            "node": "Juntar fuentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fuente 2 · Producto o changelog (conecta aquí)": {
+      "main": [
+        [
+          {
+            "node": "Juntar fuentes",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Fuente 3 · Contenidos publicados (conecta aquí)": {
+      "main": [
+        [
+          {
+            "node": "Juntar fuentes",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Juntar fuentes": {
+      "main": [
+        [
+          {
+            "node": "Un solo paquete de contexto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Un solo paquete de contexto": {
+      "main": [
+        [
+          {
+            "node": "Cruce con reglas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cruce con reglas": {
+      "main": [
+        [
+          {
+            "node": "Prompt maestro",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prompt maestro": {
+      "main": [
+        [
+          {
+            "node": "Imagen con tu brand kit (opcional)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Imagen con tu brand kit (opcional)": {
+      "main": [
+        [
+          {
+            "node": "Guardar borradores (conecta tu CMS o base de datos)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guardar borradores (conecta tu CMS o base de datos)": {
+      "main": [
+        [
+          {
+            "node": "Aviso para revisar (conecta Slack, email o tu gestor de tareas)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [],
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "nodeGroups": [
+    {
+      "id": "eb054900-4bfa-4fc8-9df9-d4ae93cafa6a",
+      "name": "Transcripción",
+      "nodeNames": [
+        "Buscar subtítulos (API de YouTube)",
+        "Descargar transcripción"
+      ],
+      "description": "Saca el texto del vídeo con la API de YouTube. Pendiente de configurar."
+    },
+    {
+      "id": "469e397f-9006-44e6-bd24-4b980c995595",
+      "name": "Contexto",
+      "nodeNames": [
+        "Juntar fuentes",
+        "Un solo paquete de contexto"
+      ],
+      "description": "Junta todas tus fuentes de conocimiento en un solo paquete para el cruce."
+    },
+    {
+      "id": "3d8bf128-4575-495f-9e51-28085b64b559",
+      "name": "Escritura",
+      "nodeNames": [
+        "Cruce con reglas",
+        "Prompt maestro",
+        "Imagen con tu brand kit (opcional)"
+      ],
+      "description": "Cruza el vídeo con tus fuentes según tus reglas y escribe artículo, posts y newsletter."
+    },
+    {
+      "id": "710ea2ee-ccac-487d-9d95-983848c3c90c",
+      "name": "Publicación",
+      "nodeNames": [
+        "Guardar borradores (conecta tu CMS o base de datos)",
+        "Aviso para revisar (conecta Slack, email o tu gestor de tareas)"
+      ],
+      "description": "Guarda los borradores y te avisa para revisarlos."
+    }
+  ]
+}
